@@ -50,6 +50,9 @@ views:
 | show_last_tracked | bool | **Optional** | `true` | Show when someone last tracked this chore (does not work on tasks).
 | show_last_tracked_by | bool | **Optional** | `true` | Show who last tracked this chore (`show_last_tracked` must be true to show this) (does not work on tasks).
 | show_track_button | bool | **Optional** | `true` | Show track (complete) button
+| show_track_button_mode | string | **Optional** | `"always"` | When set to "hover", the track button only shows when the mouse is hovered over the task or chore (tap the task or chore text on mobile).
+| show_skip_button | bool | **Optional** | `false` | Show skip chore button
+| show_skip_button_mode | string | **Optional** | `"always"` | When set to "hover", the skip button only shows when the mouse is hovered over the chore (tap the chore text on mobile).
 | show_empty | bool | **Optional** | `true` | Set to false to hide card when no items
 | show_create_task | bool | **Optional** | `false` | Set to true to show ability to add a task in Grocy directly from the card. (not functional at this time).
 | browser_mod | bool | **Optional** | `false` | Set to true _if you have installed [browser_mod](https://github.com/thomasloven/hass-browser_mod)_ and want feedback when tracking, in the form of a native toast bar.
@@ -57,12 +60,15 @@ views:
 | show_divider | bool | **Optional** | `false` | When true, shows a divider between each task. Uses the CSS variable `entities-divider-color` and falls back on `divider-color` from your theme.
 | use_icons | bool | **Optional** |  | When null, uses icons for chores/tasks only when `chore_icon` or `task_icon` is set. When true, forces defaults if `chore_icon`/`task_icon` is not set. When false, overrides `chore_icon`/`task_icon` and always uses text buttons.
 | task_icon | string | **Optional** |  | Sets the icon used on Tasks. Replaces the text. Set `use_icons` to true and don't use this parameter to use default icon.
-| task_icon_size | number | **Optional** | `24` | Sets the size of the icon for Tasks. Default is 24 because default is an empty checkbox. Only applies when `use_icon` or `task_icon` is set.
+| task_icon_size | number | **Optional** | `24` | Sets the size of the icon for Tasks. Default is 24 because default is an empty checkbox. Only applies when `use_icons` or `task_icon` is set.
 | chore_icon | string | **Optional** |  | Sets the icon used on Chores. Replaces the text. Set `use_icons` to true and don't use this parameter to use default icon.
 | chore_icon_size | number | **Optional** | `32` | Sets the size of the icon for Chores. Default is 32. Only applies when `use_icon` or `chore_icon` is set.
+| skip_icon | string | **Optional** |  | Sets the icon used on Chores for the "Skip" button. Replaces the text. Set `use_icons` to true and don't use this parameter to use default icon.
+| skip_icon_size | number | **Optional** | `32` | Sets the size of the icon for Chores for the "Skip" button. Default is 32. Only applies when `use_icons` or `skip_icon` is set.
 | expand_icon_size | number | **Optional** | `30` | Sets the size of the expand/collapse button on the Overflow area. Default is 30. Only applies when `show_overflow` is set.
 | use_long_date | bool | **Optional** | `false` | Sets if the Due/Completed dates are formatted in long format (i.e. December 31, 2022) or short format (i.e. 12/31/2022). Uses localization settings for token order.
 | due_in_days_threshold | number | **Optional** | `0` | Due dates are reported as 'Overdue', 'Today', 'Tomorrow', 'In X Days', and finally using the actual date. This sets how many days use the 'In X Days' format before it switches to using date notation.
+| use_due_in_days_for_past | bool | **Optional** | `false` | When true, uses the `due_in_days_threshold` for tracked chores, too. For example, "Last Tracked: 4 Days Ago".
 | use_24_hours | bool | **Optional** | `true` | Sets if the times are shown in 12 hour or 24 hour formats.
 | hide_text_with_no_data | bool | **Optional** | `false` | When true, if a property for an item is not set, it hides the text. For example, if a chore has never been completed, instead of showing 'Last tracked: -', it will hide the 'Last tracked' row entirely.
 
