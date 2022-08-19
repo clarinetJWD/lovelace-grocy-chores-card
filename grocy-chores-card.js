@@ -14,6 +14,9 @@ import { html, LitElement } from "https://unpkg.com/lit?module";
               show_last_tracked: true,
               show_last_tracked_by: true,
               show_track_button: true,
+              show_track_button_mode: "always", /** "hover" - When show_track_button is true, button becomes visible on hover or tap (for mobile). Other values, always visible. */
+              show_skip_button: true, 
+              show_skip_button_mode: "always", /** "hover" - When show_track_button is true, button becomes visible on hover or tap (for mobile). Other values, always visible. */
               browser_mod: false,
               show_overflow: false, /** When true, replaces the 'Look in Grocy for X more items' text with a 'Show X more' button that toggles an overflow area. */
               show_divider: false, /** When true, shows a divider between each task. Uses the CSS variable 'entities-divider-color' with fallback to 'divider-color' from your theme. */
@@ -22,11 +25,14 @@ import { html, LitElement } from "https://unpkg.com/lit?module";
               task_icon_size: 24, /** Sets the size of the icon for Tasks. Default is 24 because default is an empty checkbox. Only applies when use_icon or task_icon is set. */
               chore_icon: null, /** Sets the icon used on Chores. Replaces the text. Set "use_icons" to true and don't use this parameter to use default icon. */
               chore_icon_size: 32, /** Sets the size of the icon for Chores. Default is 32. Only applies when use_icon or chore_icon is set. */
+              skip_icon: null, /** Sets the icon used to skip Chores. Replaces the text. Set "use_icons" to true and don't use this parameter to use default icon. */
+              skip_icon_size: 32, /** Sets the size of the icon for skipping Chores. Default is 32. Only applies when use_icon or skip_icon is set. */
               expand_icon_size: 30, /** Sets the size of the expand/collapse button on the Overflow area. Default is 30. Only applies when use_icon or show_overflow is set. */
               use_long_date: false, /** Sets if the Due/Completed dates are formatted in long format (i.e. December 31, 2022) or short format (i.e. 12/31/2022). Uses localization settings for token order. */
               due_in_days_threshold: 0, /** Due dates are reported as 'Overdue', 'Today', 'Tomorrow', 'In X Days', and finally using the actual date. This sets how many days use the 'In X Days' format before it switches to using date notation. */
+              use_due_in_days_for_past: false, /** When true, uses the due_in_days formatting for past events. For example, 'Last tracked: 2 days ago.' */
               use_24_hours: true, /** Sets if the times are shown in 12 hour or 24 hour formats. */
-              hide_text_with_no_data: false, /** When true, if a property for an item is not set, it hides the text. For example, if a chore has never been completed, instead of showing 'Last tracked: -', it will hide the 'Last tracked' row entirely. */
+              hide_text_with_no_data: false /** When true, if a property for an item is not set, it hides the text. For example, if a chore has never been completed, instead of showing 'Last tracked: -', it will hide the 'Last tracked' row entirely. */
             }
     }
 
@@ -56,6 +62,25 @@ import { html, LitElement } from "https://unpkg.com/lit?module";
       return dueInDays;
     }
 
+    calculateTrackedDate(trackedDate){
+      var oneDay = 24*60*60*1000; // hours*minutes*seconds*milliseconds
+      var today = new Date();
+      today.setHours(0,0,0,0)
+
+      var splitDate = trackedDate.split(/[- :T]/)
+      var parsedTrackedDate = new Date(splitDate[0], splitDate[1]-1, splitDate[2]);
+      parsedTrackedDate.setHours(0,0,0,0)
+      
+      var trackedDays;
+      if(today < parsedTrackedDate) {
+        trackedDays = -1;
+      }
+      else
+      trackedDays = Math.abs(Math.round(Math.abs((today.getTime() - parsedTrackedDate.getTime())/(oneDay))));
+
+      return trackedDays;
+    }
+
     checkDueClass(dueInDays) {
       if (dueInDays == 0)
         return "due-today";
@@ -76,6 +101,18 @@ import { html, LitElement } from "https://unpkg.com/lit?module";
         return this.translate("In {number} Days").replace("{number}", dueInDays);
       else
         return this._formatDate(dueDate);
+    }
+    formatTrackedDate(trackedDate, trackedDays) {
+      if (trackedDays < 0)
+        return this.translate("Never");
+      else if (trackedDays == 0)
+        return this.translate("Today");
+      else if (trackedDays == 1)
+        return this.translate("Yesterday");
+      else if (trackedDays <= this.config.due_in_days_threshold)
+        return this.translate("{number} Days Ago").replace("{number}", trackedDays);
+      else
+        return this._formatDate(trackedDate);
     }
 
     translate(string) {
@@ -196,8 +233,8 @@ import { html, LitElement } from "https://unpkg.com/lit?module";
       return html`
                 ${cardCollection.map(item =>
                   html`
-                  <div class="grocy-item-container${hideFirstDivider ? "" : "-force-border" } info flex">
-                    <div>
+                  <div class="grocy-item-container ${hideFirstDivider ? "" : "grocy-item-container-force-border" } info flex">
+                    <div class="${item.type == "chore" ? "grocy-chore-text-container" : "grocy-task-text-container"}">
                       <div class="primary">
                         ${item._filtered_name != null ? item._filtered_name : item.name}
                       </div>
@@ -223,7 +260,7 @@ import { html, LitElement } from "https://unpkg.com/lit?module";
                         ${this.hide_text_with_no_data == false || item.last_tracked_time != null ? html
                           `
                           <div class="secondary">
-                            ${this.translate("Last tracked")}: ${item.last_tracked_time != null ? this._formatDate(item.last_tracked_time) : "-"}
+                            ${this.translate("Last tracked")}: ${item.last_tracked_time != null ? this.formatTrackedDate(item.last_tracked_time, item.trackedDays) : "-"}
                             ${this.show_last_tracked_by == true && item.last_done_by != null ? this.translate("by") + " " + item.last_done_by.display_name : ""}
                           </div>
                           `
@@ -235,19 +272,34 @@ import { html, LitElement } from "https://unpkg.com/lit?module";
                       `
                       : ""}
                     </div>
-                    ${this.show_track_button == true ? html
+                    ${this.show_track_button == true || this.show_skip_button == true ? html
                     `
                       ${item.type == "chore" ? html
                       `
                       <div>
-                        ${this.chore_icon != null ? html 
+                        ${this.show_skip_button == true ? html 
+                        `
+                          ${this.skip_icon != null ? html 
                           `
-                          <mwc-icon-button class="track-button" .label=${this.translate("Track")} @click=${ev => this._trackChore(item.id, item.name)}><ha-icon class="track-button-icon" .icon=${this.chore_icon} ></ha-icon></mwc-icon-button>
+                          <mwc-icon-button class="track-button skip-chore-button" .label=${this.translate("Skip")} @click=${ev => this._skipChore(item.id, item.name)}><ha-icon class="track-button-icon" title="${this.translate("Skip")}" .icon=${this.skip_icon} ></ha-icon></mwc-icon-button>
                           ` : html 
                           `
-                        <mwc-button @click=${ev => this._trackChore(item.id, item.name)}>${this.translate("Track")}</mwc-button>
+                          <mwc-button class="skip-chore-button" @click=${ev => this._skipChore(item.id, item.name)}>${this.translate("Skip")}</mwc-button>
                           ` }
-                        
+                        `
+                        : ""}
+                      
+                        ${this.show_track_button == true ? html 
+                        `
+                          ${this.chore_icon != null ? html 
+                          `
+                          <mwc-icon-button class="track-button track-chore-button" .label=${this.translate("Track")} @click=${ev => this._trackChore(item.id, item.name)}><ha-icon class="track-button-icon" title="${this.translate("Track")}" .icon=${this.chore_icon} ></ha-icon></mwc-icon-button>
+                          ` : html 
+                          `
+                          <mwc-button class="track-chore-button" @click=${ev => this._trackChore(item.id, item.name)}>${this.translate("Track")}</mwc-button>
+                          ` }
+                        `
+                        : ""}
                       </div>
                       `
                       : html
@@ -255,10 +307,10 @@ import { html, LitElement } from "https://unpkg.com/lit?module";
                       <div>
                         ${this.task_icon != null ? html 
                           `
-                          <mwc-icon-button class="track-checkbox" .label=${this.translate("Track")} @click=${ev => this._trackTask(item.id, item.name)}><ha-icon class="track-button-icon" .icon=${this.task_icon} ></ha-icon></mwc-icon-button>
+                          <mwc-icon-button class="track-checkbox track-task-button" .label=${this.translate("Track")} @click=${ev => this._trackTask(item.id, item.name)}><ha-icon class="track-button-icon" .icon=${this.task_icon} ></ha-icon></mwc-icon-button>
                           ` : html 
                           `
-                        <mwc-button @click=${ev => this._trackTask(item.id, item.name)}>${this.translate("Track")}</mwc-button>
+                        <mwc-button class="track-task-button" @click=${ev => this._trackTask(item.id, item.name)}>${this.translate("Track")}</mwc-button>
                           ` }
                         
                       </div>
@@ -317,23 +369,39 @@ import { html, LitElement } from "https://unpkg.com/lit?module";
     _trackChore(choreId, choreName){
       this._hass.callService("grocy", "execute_chore", {
         chore_id: choreId,
-        done_by: this.userId
+        done_by: this.userId,
+        skipped: false
       });
-      this._showToast(choreName);
+
+      var message = this.translate("Tracked") + " \"" + choreName + "\".";
+      this._showToast(message);
+    }
+
+    _skipChore(choreId, choreName){
+      this._hass.callService("grocy", "execute_chore", {
+        chore_id: choreId,
+        done_by: this.userId,
+        skipped: true
+      });
+
+      var message = this.translate("Skipped") + " \"" + choreName + "\".";
+      this._showToast(message);
     }
 
     _trackTask(taskId, taskName){
       this._hass.callService("grocy", "complete_task", {
         task_id: taskId
       });
-      this._showToast(taskName);
+
+      var message = this.translate("Tracked") + " \"" + taskName + "\".";
+      this._showToast(message);
     }
 
-    _showToast(name){
+    _showToast(message){
       if(this.config.browser_mod != null && this.config.browser_mod === true)
       {
         this._hass.callService("browser_mod", "toast", {
-          message: `${this.translate("Tracked")} "${name}".`,
+          message: `${message}`,
           duration: 3000
         });
       }
@@ -389,13 +457,72 @@ import { html, LitElement } from "https://unpkg.com/lit?module";
         console.log("Adding task: " + taskName + ", due: " + taskDueDate)
       }
     }
+    _getTaskButtonSize(addIfVisible) {
+      if(this.show_track_button){
+        if(this.use_icons) {
+          if(this.task_icon_size > 0){
+            return this.task_icon_size + addIfVisible;
+          } else {
+            return 24 + addIfVisible;
+          }
+        } else {
+          return this._measureButton("measure_task_button", "Track", addIfVisible);
+        }
+      } else {
+        return 0;
+      }
+    }
+    _getChoreButtonSize(addIfVisible) {
+      if(this.show_track_button){
+        if(this.use_icons) {
+          if(this.chore_icon_size > 0){
+            return this.chore_icon_size + addIfVisible;
+          } else {
+            return 32 + addIfVisible;
+          }
+        } else {
+          return this._measureButton("measure_chore_button", "Track", addIfVisible);
+        }
+      } else {
+        return 0;
+      }
+    }
+    _getSkipChoreButtonSize(addIfVisible) {
+      if(this.show_skip_button){
+        if(this.use_icons) {
+          if(this.skip_icon_size > 0){
+            return this.skip_icon_size + addIfVisible;
+          } else {
+            return 32 + addIfVisible;
+          }
+        } else {
+          return this._measureButton("measure_skip_button", "Skip", addIfVisible);
+        }        
+      } else {
+        return 0;
+      }
+    }
+    _measureButton(buttonId, buttonText, addIfVisible) {
+      /** Please, I beg soeone to come up with a better way to measure the text buttons than this.
+       * This is terrible. Very terrible. But it works...
+       */
+      var buttonEl = document.getElementById(buttonId);
+      if(buttonEl == null) {
+        var newDiv = document.createElement("div");
+        newDiv.innerHTML = "<div style=\"position: fixed; top: -100px;\"><mwc-button id=\"" + buttonId + "\" class=\"track-chore-button\" style=\"opacity: 1.0;\">" + this.translate(buttonText) + "</mwc-button></div>";
+        document.body.appendChild(newDiv);
+        return 0;
+      } else {
+        return buttonEl.offsetWidth + addIfVisible;
+      }
+    }
 
     _renderStyle() {
         return html
         `
           <style>
             .info {
-              padding-bottom: 1em;
+              /*padding-bottom: 1em;*/
             }
             .flex {
               display: flex;
@@ -418,11 +545,13 @@ import { html, LitElement } from "https://unpkg.com/lit?module";
               display: block;
               color: var(--primary-text-color, #8c96a5);
               font-size: var(--paper-font-subhead_-_font-size);
+              line-height: var(--paper-font-subhead_-_line-height);
             }
             .secondary {
               display: block;
               color: var(--secondary-text-color, #8c96a5);
               font-size: var(--paper-font-body1_-_font-size);
+              line-height: var(--paper-font-body1_-_line-height);
             }
             .add-row {
               margin-top: -16px;
@@ -442,10 +571,21 @@ import { html, LitElement } from "https://unpkg.com/lit?module";
             .grocy-item-container, .grocy-item-container-force-border {
               border-top: ${this.show_divider ? 1 : 0 }px solid var(--entities-divider-color, var(--divider-color, transparent)); 
               padding-top: 12px;
+              padding-bottom: 12px;
               align-items: center;
+              min-height: calc(var(--paper-font-subhead_-_line-height) + var(--paper-font-body1_-_line-height) + var(--paper-font-body1_-_line-height));
             }
             .grocy-item-container:first-child {
               border-top: none;
+            }
+            .grocy-item-container-force-border:first-child {
+              border-top: ${this.show_divider ? 1 : 0 }px solid var(--entities-divider-color, var(--divider-color, transparent)); 
+            }
+            .grocy-chore-text-container {
+              max-width: calc(100% - ${this._getChoreButtonSize(18) + this._getSkipChoreButtonSize(18)}px);
+            }
+            .grocy-task-text-container {
+              max-width: calc(100% - ${this._getTaskButtonSize(16)}px);
             }
             .expand-button {
               --mdc-ripple-color: none; 
@@ -454,13 +594,16 @@ import { html, LitElement } from "https://unpkg.com/lit?module";
             }
             .track-button {
               --mdc-ripple-color: none; 
-              --mdc-icon-size: ${this.chore_icon_size > 0 ? this.chore_icon_size : 32 }px; 
-              width: ${this.chore_icon_size > 0 ? ((this.chore_icon_size - 48) / 2) + 48 : 48 }px; /* I know this is bad. Not sure wht the width is 48px to begin with, though, so it needs to do this to align correctly. */
+              --mdc-icon-size: ${this._getChoreButtonSize(0)}px; 
+              width: ${this._getChoreButtonSize(0)}px; 
+              height: ${this._getChoreButtonSize(0)}px; 
+              margin-left: 16px;
             }
             .track-checkbox {
               --mdc-ripple-color: none; 
-              --mdc-icon-size: ${this.task_icon_size > 0 ? this.task_icon_size : 24 }px; 
-              width: ${this.task_icon_size > 0 ? ((this.task_icon_size - 48) / 2) + 48 : 48 }px; /* I know this is bad. Not sure wht the width is 48px to begin with, though, so it needs to do this to align correctly. */
+              --mdc-icon-size: ${this._getTaskButtonSize(0) }px; 
+              width: ${this._getTaskButtonSize(0)}px; 
+              height: ${this._getTaskButtonSize(0)}px; 
             }
             .more-items-title {
               padding: 6px 16px 6px 16px;
@@ -480,9 +623,33 @@ import { html, LitElement } from "https://unpkg.com/lit?module";
             }
             .track-button-icon {
               color: var(--primary-text-color);
+              position: absolute;
+              top: 0px;
+              left: 0px;
             }
             .track-button-icon:hover {
               color: var(--green, var(--active-color, green));
+            }
+
+            .grocy-item-container:hover .skip-chore-button {
+              display: inline-block;
+            }
+            .grocy-item-container .skip-chore-button {
+              display: ${this.show_skip_button_mode == "hover" ? "none" : "inline-block" };
+            }
+
+            .grocy-item-container:hover .track-chore-button {
+              display: inline-block;
+            }
+            .grocy-item-container .track-chore-button {
+              display: ${this.show_track_button_mode == "hover" ? "none" : "inline-block" };
+            }
+
+            .grocy-item-container:hover .track-task-button {
+              display: inline-block;
+            }
+            .grocy-item-container .track-task-button {
+              display: ${this.show_track_button_mode == "hover" ? "none" : "inline-block" };
             }
             .card-overflow-content {
               
@@ -510,6 +677,9 @@ import { html, LitElement } from "https://unpkg.com/lit?module";
         this.show_days = this.config.show_days === null || this.config.show_days === '' ? null : this.config.show_days;
         this.show_assigned = this.config.show_assigned == null ? true : this.config.show_assigned;
         this.show_track_button = this.config.show_track_button == null ? true : this.config.show_track_button;
+        this.show_track_button_mode = this.config.show_track_button_mode === null || this.config.show_track_button_mode === '' ? 'always' : this.config.show_track_button_mode;
+        this.show_skip_button = this.config.show_skip_button == null ? false : this.config.show_skip_button;
+        this.show_skip_button_mode = this.config.show_skip_button_mode === null || this.config.show_skip_button_mode === '' ? 'always' : this.config.show_skip_button_mode;
         this.show_last_tracked = this.config.show_last_tracked == null ? true : this.config.show_last_tracked;
         this.show_last_tracked_by = this.config.show_last_tracked_by == null ? true : this.config.show_last_tracked_by;
         this.filter_category = this.config.filter_category == null ? null : this.config.filter_category;
@@ -520,23 +690,28 @@ import { html, LitElement } from "https://unpkg.com/lit?module";
         this.show_overflow = this.config.show_overflow === null || this.config.show_overflow === '' ? false : this.config.show_overflow;
         this.chore_icon_size = this.config.chore_icon_size == null || this.config.chore_icon_size == 0 || this.config.chore_icon_size == '' ? 32 : this.config.chore_icon_size;
         this.task_icon_size = this.config.task_icon_size == null || this.config.task_icon_size == 0 || this.config.task_icon_size == '' ? 24 : this.config.task_icon_size;
+        this.skip_icon_size = this.config.skip_icon_size == null || this.config.skip_icon_size == 0 || this.config.skip_icon_size == '' ? 32 : this.config.skip_icon_size;
         this.expand_icon_size = this.config.expand_icon_size == null || this.config.expand_icon_size == 0 || this.config.expand_icon_size == '' ? 30 : this.config.expand_icon_size;
         this.show_divider = this.config.show_divider == null ? false : this.config.show_divider;
         this.due_in_days_threshold = this.config.due_in_days_threshold == null || this.config.due_in_days_threshold == '' ? 0 : this.config.due_in_days_threshold;
+        this.use_due_in_days_for_past = this.config.use_due_in_days_for_past == null ? false : this.config.use_due_in_days_for_past;
         this.hide_text_with_no_data = this.config.hide_text_with_no_data == null ? false : this.config.hide_text_with_no_data;
         this.use_long_date = this.config.use_long_date == null ? false : this.config.use_long_date;
         this.use_24_hours = this.config.use_24_hours == null ? true : this.config.use_24_hours;
         if(this.use_icons == null) {
           this.task_icon = this.config.task_icon == null || this.config.task_icon == '' ? null : this.config.task_icon;
           this.chore_icon = this.config.chore_icon == null || this.config.chore_icon == '' ? null : this.config.chore_icon;
+          this.skip_icon = this.config.skip_icon == null || this.config.skip_icon == '' ? null : this.config.skip_icon;
         }
         else if(this.use_icons) {
           this.task_icon = this.config.task_icon == null || this.config.task_icon == '' ? 'mdi:checkbox-blank-outline' : this.config.task_icon;
           this.chore_icon = this.config.chore_icon == null || this.config.chore_icon == '' ? 'mdi:check-circle-outline' : this.config.chore_icon;
+          this.skip_icon = this.config.skip_icon == null || this.config.skip_icon == '' ? 'mdi:skip-next-circle-outline' : this.config.skip_icon;
         }
         else {
           this.task_icon = null
           this.chore_icon = null
+          this.skip_icon = null
         }
         this.use_icons = this.config.use_icons == null ? null : this.config.use_icons;
       }
@@ -660,6 +835,10 @@ import { html, LitElement } from "https://unpkg.com/lit?module";
           allItems.map(item =>{
             var dueInDays = item.next_estimated_execution_time ? this.calculateDueDate(item.next_estimated_execution_time) : 10000;
             item.dueInDays = dueInDays;
+
+            var trackedDays = item.last_tracked_time ? this.calculateTrackedDate(item.last_tracked_time) : -1;
+            item.trackedDays = trackedDays;
+
             if(this.show_days != null) {
               if(dueInDays <= this.show_days){
                 finalItemsList.push(item);
